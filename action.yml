@@ -1,0 +1,63 @@
+name: "Deploy ECS Service"
+description: "Updates task definition, updates service, and waits for stability"
+inputs:
+  aws-region:
+    description: "The AWS Region"
+    required: true
+  ecs-cluster:
+    description: "The name of the ECS cluster"
+    required: true
+  ecs-service:
+    description: "The name of the ECS service"
+    required: true
+  container-name:
+    description: "The name of the container within the task definition to update"
+    required: true
+  docker-image:
+    description: "Docker Image Tag"
+    required: true
+  wait-for-service-stability:
+    description: "Whether to wait for service stability"
+    required: false
+    default: "true"
+  AWS_ACCESS_KEY_ID:
+    description: "AWS Access Key"
+    required: true
+  AWS_SECRET_ACCESS_KEY:
+    description: "AWS Secret Access Key"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1.6.1
+      with:
+        aws-access-key-id: ${{ inputs.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ inputs.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Download task definition
+      shell: 'bash'
+      run: |
+        aws ecs describe-task-definition --task-definition ${{ inputs.ecs-service }} --query taskDefinition > task-definition.json
+
+    - name: Fill in the new image ID in the Amazon ECS task definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1.1.1
+      with:
+        task-definition: task-definition.json
+        container-name: ${{ inputs.container-name }}
+        image: ${{ inputs.docker-image }}
+
+    - name: Deploy Amazon ECS task definition
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1.4.9
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: ${{ inputs.ecs-service }}
+        cluster: ${{ inputs.ecs-cluster }}
+        wait-for-service-stability: ${{ inputs.wait-for-service-stability }}
+
+branding:
+  icon: 'target'
+  color: 'gray-dark'
